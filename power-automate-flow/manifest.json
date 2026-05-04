@@ -1,0 +1,83 @@
+{
+  "schema": "1.0",
+  "details": {
+    "displayName": "Patch Group Automation Flow",
+    "description": "",
+    "createdTime": "2026-05-04T20:19:50.4813716Z",
+    "packageTelemetryId": "2229fdb5-3253-498b-b1be-812fa1b699c1",
+    "creator": "N/A",
+    "sourceEnvironment": ""
+  },
+  "resources": {
+    "74ca41cb-4489-4c52-8e34-25c21c4bbce8": {
+      "type": "Microsoft.Flow/flows",
+      "suggestedCreationType": "Update",
+      "creationType": "Existing, New, Update",
+      "details": {
+        "displayName": "PrinterLogic Client Updates"
+      },
+      "configurableBy": "User",
+      "hierarchy": "Root",
+      "dependsOn": [
+        "908285b6-94e0-4e8a-bc1c-94c326b997bb",
+        "d49c51c1-86e9-4c8f-a8b0-d7640b25bdf7",
+        "55639701-360c-4839-872c-15caebdea2f4",
+        "ca37823d-be18-4c96-8361-1c0a576fbd5b"
+      ]
+    },
+    "908285b6-94e0-4e8a-bc1c-94c326b997bb": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_powerbi",
+      "name": "shared_powerbi",
+      "type": "Microsoft.PowerApps/apis",
+      "suggestedCreationType": "Existing",
+      "details": {
+        "displayName": "Power BI",
+        "iconUri": "https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1800/1.0.1800.4610/powerbi/icon.png"
+      },
+      "configurableBy": "System",
+      "hierarchy": "Child",
+      "dependsOn": []
+    },
+    "d49c51c1-86e9-4c8f-a8b0-d7640b25bdf7": {
+      "type": "Microsoft.PowerApps/apis/connections",
+      "suggestedCreationType": "Existing",
+      "creationType": "Existing",
+      "details": {
+        "displayName": "<sender@your-domain.com>",
+        "iconUri": "https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1800/1.0.1800.4610/powerbi/icon.png"
+      },
+      "configurableBy": "User",
+      "hierarchy": "Child",
+      "dependsOn": [
+        "908285b6-94e0-4e8a-bc1c-94c326b997bb"
+      ]
+    },
+    "55639701-360c-4839-872c-15caebdea2f4": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_sendmail",
+      "name": "shared_sendmail",
+      "type": "Microsoft.PowerApps/apis",
+      "suggestedCreationType": "Existing",
+      "details": {
+        "displayName": "Mail",
+        "iconUri": "https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1777/1.0.1777.4410/sendmail/icon.png"
+      },
+      "configurableBy": "System",
+      "hierarchy": "Child",
+      "dependsOn": []
+    },
+    "ca37823d-be18-4c96-8361-1c0a576fbd5b": {
+      "type": "Microsoft.PowerApps/apis/connections",
+      "suggestedCreationType": "Existing",
+      "creationType": "Existing",
+      "details": {
+        "displayName": "Mail",
+        "iconUri": "https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1777/1.0.1777.4410/sendmail/icon.png"
+      },
+      "configurableBy": "User",
+      "hierarchy": "Child",
+      "dependsOn": [
+        "55639701-360c-4839-872c-15caebdea2f4"
+      ]
+    }
+  }
+}

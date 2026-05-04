@@ -1,0 +1,292 @@
+{
+  "name": "aec76d6a-67b0-4e66-a138-ac140dbfe4d8",
+  "id": "/providers/Microsoft.Flow/flows/aec76d6a-67b0-4e66-a138-ac140dbfe4d8",
+  "type": "Microsoft.Flow/flows",
+  "properties": {
+    "apiId": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+    "displayName": "PrinterLogic Client Updates",
+    "definition": {
+      "metadata": {
+        "workflowEntityId": null,
+        "processAdvisorMetadata": null,
+        "flowChargedByPaygo": null,
+        "flowclientsuspensionreason": "None",
+        "flowclientsuspensiontime": null,
+        "flowclientsuspensionreasondetails": "",
+        "creator": {
+          "id": "cf839905-ed46-4e34-b0ab-9d978984fc1e",
+          "type": "User",
+          "tenantId": "f1289cc5-8456-4f28-8eab-700d1300fc5d"
+        },
+        "provisioningMethod": "FromDefinition",
+        "failureAlertSubscription": true,
+        "clientLastModifiedTime": "2026-05-04T20:08:33.1296789Z",
+        "connectionKeySavedTimeKey": "2026-05-04T20:06:06.3306936Z",
+        "creationSource": null,
+        "modifiedSources": "Portal"
+      },
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "undefined",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        }
+      },
+      "triggers": {
+        "Recurrence": {
+          "recurrence": {
+            "frequency": "Week",
+            "interval": 1,
+            "startTime": "2024-10-07T06:00:00.000Z",
+            "schedule": {
+              "weekDays": [
+                "Sunday"
+              ],
+              "hours": [
+                "1"
+              ],
+              "minutes": [
+                40
+              ]
+            }
+          },
+          "evaluatedRecurrence": {
+            "frequency": "Week",
+            "interval": 1,
+            "startTime": "2024-10-07T06:00:00.000Z",
+            "schedule": {
+              "weekDays": [
+                "Sunday"
+              ],
+              "hours": [
+                "1"
+              ],
+              "minutes": [
+                40
+              ]
+            }
+          },
+          "metadata": {
+            "operationMetadataId": "78618311-eae1-406f-8074-54133ae08807"
+          },
+          "type": "Recurrence"
+        }
+      },
+      "actions": {
+        "Run_a_query_against_a_dataset": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "90298f90-0df9-4372-961c-600bb31c2c94"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "groupid": "bd59c620-db18-4799-a4af-e938b8e2e3e1",
+              "datasetid": "7899f95e-dff6-414f-b595-f3df5e20ea6a",
+              "specification/query": "// Sample App DAX Query (native column, unbounded)\nDEFINE\n    VAR __DS0FilterTable =\n        TREATAS(\n            {\n                \"Sample App\"\n            },\n            'App Inventory'[App Inventory Name]\n        )\n\n    VAR __DS0FilterTable2 =\n        TREATAS(\n            {\n                \"Sample Category A\",\n                \"Sample Category B\"\n            },\n            'Device Category'[Device Category Name]\n        )\n\n    VAR __DS0Core =\n        CALCULATETABLE(\n            DISTINCT('Device'[Azure AD Device ID]),\n            KEEPFILTERS(__DS0FilterTable),\n            KEEPFILTERS(__DS0FilterTable2)\n        )\n\nEVALUATE\n    __DS0Core\n\nORDER BY\n    'Device'[Azure AD Device ID]",
+              "specification/serializerSettings/includeNulls": false
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_powerbi",
+              "connectionName": "shared_powerbi",
+              "operationId": "ExecuteDatasetQuery"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Parse_JSON": {
+          "runAfter": {
+            "Run_a_query_against_a_dataset": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "c118866a-78ad-4f21-aeff-6c9b2b994524"
+          },
+          "type": "ParseJson",
+          "inputs": {
+            "content": "@outputs('Run_a_query_against_a_dataset')?['body']?['results']?[0]?['tables']?[0]?['rows']",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "Device[Azure AD Device ID]": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "Device[Azure AD Device ID]"
+                ]
+              }
+            }
+          }
+        },
+        "HTTP": {
+          "runAfter": {
+            "Select": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "7bfaea68-a126-4cf3-8842-da65026e3a37"
+          },
+          "type": "Http",
+          "inputs": {
+            "uri": "<replace-with-your-logic-app-trigger-url>",
+            "method": "POST",
+            "headers": {
+              "Content-type": "application/json"
+            },
+            "body": {
+              "deviceIds": "@outputs('Select')",
+              "groupName": "@variables('GroupName')"
+            }
+          },
+          "runtimeConfiguration": {
+            "contentTransfer": {
+              "transferMode": "Chunked"
+            }
+          }
+        },
+        "Initialize_GroupName_variable": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "7b9b9e84-4e1e-4055-b43f-30992aac7240"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "GroupName",
+                "type": "string",
+                "value": "000-App-Update-PrinterLogic Client"
+              }
+            ]
+          }
+        },
+        "Select": {
+          "runAfter": {
+            "Parse_JSON": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "c45019cd-5ead-4eb6-b225-aa86b80fe38d"
+          },
+          "type": "Select",
+          "inputs": {
+            "from": "@body('Parse_JSON')",
+            "select": {
+              "deviceid": "@item()['Device[Azure AD Device ID]']\r\n"
+            }
+          }
+        },
+        "Compose": {
+          "runAfter": {
+            "Select": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "98656a19-1e78-4958-8063-b5dd5b7844b1"
+          },
+          "type": "Compose",
+          "inputs": "@body('Select')"
+        },
+        "Compose_First_Table": {
+          "runAfter": {
+            "Run_a_query_against_a_dataset": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "0eaa740f-b3e5-4d2b-8f5d-66932d275df0"
+          },
+          "type": "Compose",
+          "inputs": "@outputs('Run_a_query_against_a_dataset')?['body/firstTableRows']"
+        },
+        "Compose_Body": {
+          "runAfter": {
+            "Run_a_query_against_a_dataset": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "e4a12813-9e0e-4ae7-b8ff-45f923c2137b"
+          },
+          "type": "Compose",
+          "inputs": "@body('Run_a_query_against_a_dataset')"
+        },
+        "Compose_JSON_Body": {
+          "runAfter": {
+            "Parse_JSON": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "39e26e9c-13b5-41a3-809a-0f05c0f824e1"
+          },
+          "type": "Compose",
+          "inputs": "@body('Parse_JSON')"
+        },
+        "Send_an_email_upon_failure": {
+          "runAfter": {
+            "Compose": [
+              "Failed",
+              "Skipped",
+              "TimedOut"
+            ],
+            "HTTP": [
+              "Failed",
+              "Skipped",
+              "TimedOut"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "ec2943ca-9d34-46ec-84f5-6f71e704acc1"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "request/to": "<sender@your-domain.com>;<recipient@your-domain.com>",
+              "request/subject": "PrinterLogic Client Updates Automation Failed",
+              "request/text": "<p class=\"editor-paragraph\">The automation failed to submit data to the logic app. See the run history here: https://make.powerautomate.com/environments/Default-f1289cc5-8456-4f28-8eab-700d1300fc5d/flows/9527863c-6fb8-465e-9a6e-e75f14bd0e33/details</p>"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sendmail",
+              "connectionName": "shared_sendmail",
+              "operationId": "SendEmailV3"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      }
+    },
+    "connectionReferences": {
+      "shared_powerbi": {
+        "connectionName": "shared-powerbi-4de95237-90e9-42c5-ada0-9384-10eea649",
+        "source": "Embedded",
+        "id": "/providers/Microsoft.PowerApps/apis/shared_powerbi",
+        "tier": "NotSpecified",
+        "apiName": "powerbi",
+        "isProcessSimpleApiReferenceConversionAlreadyDone": false
+      },
+      "shared_sendmail": {
+        "connectionName": "shared-sendmail-051c5bba-5fa9-484f-9522-ddfe-a2353d60",
+        "source": "Embedded",
+        "id": "/providers/Microsoft.PowerApps/apis/shared_sendmail",
+        "tier": "NotSpecified",
+        "apiName": "sendmail",
+        "isProcessSimpleApiReferenceConversionAlreadyDone": false
+      }
+    },
+    "flowFailureAlertSubscribed": false,
+    "isManaged": false
+  }
+}

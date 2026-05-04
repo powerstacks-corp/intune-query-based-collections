@@ -1,0 +1,819 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "When_a_HTTP_request_is_received": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "deviceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "groupName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "deviceIds",
+            "groupName"
+          ]
+        }
+      }
+    }
+  },
+  "actions": {
+    "HTTP_Check_Group": {
+      "runAfter": {
+        "Response": [
+          "Succeeded"
+        ]
+      },
+      "type": "Http",
+      "inputs": {
+        "uri": "https://graph.microsoft.com/v1.0/groups?$filter=displayName eq '@{triggerBody()?['groupName']}'",
+        "method": "GET",
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://graph.microsoft.com/"
+        }
+      },
+      "runtimeConfiguration": {
+        "contentTransfer": {
+          "transferMode": "Chunked"
+        }
+      }
+    },
+    "Group_Exists": {
+      "actions": {
+        "Set_GroupID_variable": {
+          "type": "SetVariable",
+          "inputs": {
+            "name": "GroupID",
+            "value": "body('HTTP_Check_Group')?['value'][0]['id']\n"
+          }
+        },
+        "HTTP_Get_Group_Members": {
+          "runAfter": {
+            "Set_GroupID_variable": [
+              "Succeeded"
+            ]
+          },
+          "type": "Http",
+          "inputs": {
+            "uri": "https://graph.microsoft.com/v1.0/groups/@{body('HTTP_Check_Group')?['value'][0]['id']}/members?$top=999&$select=id,displayName",
+            "method": "GET",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://graph.microsoft.com"
+            }
+          },
+          "runtimeConfiguration": {
+            "paginationPolicy": {
+              "minimumItemCount": 999
+            },
+            "contentTransfer": {
+              "transferMode": "Chunked"
+            }
+          }
+        },
+        "For_each_member": {
+          "foreach": "@body('HTTP_Get_Group_Members')?['value']\n",
+          "actions": {
+            "Append_members_array": {
+              "type": "AppendToArrayVariable",
+              "inputs": {
+                "name": "allMembers",
+                "value": "@json(concat('{\"deviceId\": \"', item()?['Id'], '\"}'))\r\n"
+              }
+            }
+          },
+          "runAfter": {
+            "HTTP_Get_Group_Members": [
+              "Succeeded"
+            ]
+          },
+          "type": "Foreach"
+        },
+        "View_Members_Arrary": {
+          "runAfter": {
+            "For_each_member": [
+              "Succeeded"
+            ]
+          },
+          "type": "Compose",
+          "inputs": "@variables('allMembers')"
+        }
+      },
+      "runAfter": {
+        "Initialize_GroupID_variable": [
+          "Succeeded"
+        ],
+        "Initialize_allMembers_variable": [
+          "Succeeded"
+        ],
+        "Initialize_nextLink_Variable": [
+          "Succeeded"
+        ],
+        "Initialize_LoopDone_variable": [
+          "Succeeded"
+        ],
+        "Initialize_DeviceIDs_Array": [
+          "Succeeded"
+        ],
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "else": {
+        "actions": {
+          "HTTP_Create_Group": {
+            "type": "Http",
+            "inputs": {
+              "uri": "https://graph.microsoft.com/v1.0/groups",
+              "method": "POST",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "displayName": "@{triggerBody()?['groupName']}",
+                "mailEnabled": false,
+                "mailNickname": "@{replace(triggerBody()?['groupName'], ' ', '')}",
+                "securityEnabled": true
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://graph.microsoft.com/"
+              }
+            },
+            "runtimeConfiguration": {
+              "contentTransfer": {
+                "transferMode": "Chunked"
+              }
+            }
+          },
+          "Get_New_GroupID": {
+            "runAfter": {
+              "HTTP_Create_Group": [
+                "Succeeded"
+              ]
+            },
+            "type": "SetVariable",
+            "inputs": {
+              "name": "GroupID",
+              "value": "body('HTTP_Check_Group')?['value'][0]['id']\n"
+            }
+          }
+        }
+      },
+      "expression": {
+        "and": [
+          {
+            "greater": [
+              "@length(body('HTTP_Check_Group')?['value'])",
+              0
+            ]
+          }
+        ]
+      },
+      "type": "If"
+    },
+    "Initialize_GroupID_variable": {
+      "runAfter": {
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "GroupID",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "Initialize_allMembers_variable": {
+      "runAfter": {
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "allMembers",
+            "type": "array"
+          }
+        ]
+      }
+    },
+    "Initialize_LoopDone_variable": {
+      "runAfter": {
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "LoopDone",
+            "type": "boolean",
+            "value": false
+          }
+        ]
+      }
+    },
+    "Initialize_nextLink_Variable": {
+      "runAfter": {
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "nextLink",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "View_the_POST_for_Troubleshooting": {
+      "runAfter": {
+        "Response": [
+          "Succeeded"
+        ]
+      },
+      "type": "Compose",
+      "inputs": "@triggerBody()?['deviceIds']"
+    },
+    "Initialize_DeviceIDs_Array": {
+      "runAfter": {
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "DeviceIds",
+            "type": "array",
+            "value": "@triggerBody()?['deviceIds']?['body']"
+          }
+        ]
+      }
+    },
+    "Response": {
+      "runAfter": {},
+      "type": "Response",
+      "kind": "Http",
+      "inputs": {
+        "statusCode": 200,
+        "body": "@triggerOutputs()?['body/deviceIds']\r\n"
+      }
+    },
+    "Previous_Members": {
+      "actions": {
+        "Add_ObjectID": {
+          "foreach": "@outputs('Select_ObjectIds')['body']",
+          "actions": {
+            "Additions": {
+              "actions": {},
+              "else": {
+                "actions": {
+                  "Append_to_Additions": {
+                    "type": "AppendToArrayVariable",
+                    "inputs": {
+                      "name": "addIds",
+                      "value": "@items('Add_ObjectID')"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "contains": [
+                      "@variables('allMembers')",
+                      "@items('Add_ObjectID')"
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            }
+          },
+          "runAfter": {
+            "Remove_ObjectID": [
+              "Succeeded"
+            ]
+          },
+          "type": "Foreach"
+        },
+        "Remove_ObjectID": {
+          "foreach": "@outputs('Select_allMembers')['body']",
+          "actions": {
+            "Removals": {
+              "actions": {},
+              "else": {
+                "actions": {
+                  "Append_to_Removals": {
+                    "type": "AppendToArrayVariable",
+                    "inputs": {
+                      "name": "removeIds",
+                      "value": "@items('Remove_ObjectID')"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "contains": [
+                      "@body('Select_ObjectIds')",
+                      "@items('Remove_ObjectID')"
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            }
+          },
+          "type": "Foreach"
+        }
+      },
+      "runAfter": {
+        "Select_ObjectIds": [
+          "Succeeded"
+        ]
+      },
+      "else": {
+        "actions": {
+          "Select_objectIds_Only": {
+            "type": "Select",
+            "inputs": {
+              "from": "@variables('ObjectIds')",
+              "select": {
+                "DeviceId": "@item()?['DeviceId']"
+              }
+            }
+          },
+          "For_each_objectid": {
+            "foreach": "@variables('DeviceIds')",
+            "actions": {
+              "Append_to_Additions_Only": {
+                "type": "AppendToArrayVariable",
+                "inputs": {
+                  "name": "addIds",
+                  "value": "item()?['DeviceId']"
+                }
+              }
+            },
+            "runAfter": {
+              "Select_objectIds_Only": [
+                "Succeeded"
+              ]
+            },
+            "type": "Foreach"
+          }
+        }
+      },
+      "expression": {
+        "and": [
+          {
+            "not": {
+              "equals": [
+                "@variables('allMembers')",
+                "@null"
+              ]
+            }
+          }
+        ]
+      },
+      "type": "If"
+    },
+    "Initialize_removeIds_Array": {
+      "runAfter": {
+        "Group_Exists": [
+          "Succeeded"
+        ],
+        "For_each_DeviceId_get_ObjectId": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "removeIds",
+            "type": "array"
+          }
+        ]
+      }
+    },
+    "Initialize_addIds_Array": {
+      "runAfter": {
+        "Initialize_removeIds_Array": [
+          "Succeeded"
+        ],
+        "For_each_DeviceId_get_ObjectId": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "addIds",
+            "type": "array"
+          }
+        ]
+      }
+    },
+    "Select_allMembers": {
+      "runAfter": {
+        "Initialize_addIds_Array": [
+          "Succeeded"
+        ],
+        "For_each_DeviceId_get_ObjectId": [
+          "Succeeded"
+        ]
+      },
+      "type": "Select",
+      "inputs": {
+        "from": "@variables('allMembers')",
+        "select": {
+          "DeviceId": "@item()?['deviceId']"
+        }
+      }
+    },
+    "Select_ObjectIds": {
+      "runAfter": {
+        "For_each_DeviceId_get_ObjectId": [
+          "Succeeded"
+        ],
+        "Select_allMembers": [
+          "Succeeded"
+        ]
+      },
+      "type": "Select",
+      "inputs": {
+        "from": "@variables('ObjectIds')",
+        "select": {
+          "DeviceId": "@item()?['deviceId']"
+        }
+      }
+    },
+    "View_Removals": {
+      "runAfter": {
+        "Previous_Members": [
+          "Succeeded"
+        ]
+      },
+      "type": "Compose",
+      "inputs": "@variables('removeIds')"
+    },
+    "View_Additions": {
+      "runAfter": {
+        "Previous_Members": [
+          "Succeeded"
+        ]
+      },
+      "type": "Compose",
+      "inputs": "@variables('addIds')"
+    },
+    "For_each_DeviceId_get_ObjectId": {
+      "foreach": "@variables('DeviceIds')",
+      "actions": {
+        "Get_ObjectIds": {
+          "type": "Http",
+          "inputs": {
+            "uri": "https://graph.microsoft.com/v1.0/devices?$filter=deviceId eq '@{item()?['deviceid']}'&$select=id,displayName",
+            "method": "GET",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://graph.microsoft.com"
+            }
+          },
+          "operationOptions": "DisableAsyncPattern",
+          "runtimeConfiguration": {
+            "contentTransfer": {
+              "transferMode": "Chunked"
+            }
+          }
+        },
+        "If_ObjectId_Found": {
+          "actions": {
+            "Append_to_ObjectIds": {
+              "type": "AppendToArrayVariable",
+              "inputs": {
+                "name": "ObjectIds",
+                "value": {
+                  "DeviceId": "@{body('Get_ObjectIds')?['value'][0]['id']}",
+                  "DeviceName": "@{body('Get_ObjectIds')?['value'][0]['displayName']}"
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Check_for_null_value": [
+              "Succeeded"
+            ]
+          },
+          "else": {
+            "actions": {}
+          },
+          "expression": {
+            "and": [
+              {
+                "equals": [
+                  "@outputs('Get_ObjectIds')?['statusCode']",
+                  200
+                ]
+              },
+              {
+                "greater": [
+                  "@outputs('Check_for_null_value')",
+                  0
+                ]
+              }
+            ]
+          },
+          "type": "If"
+        },
+        "Check_for_null_value": {
+          "runAfter": {
+            "Get_ObjectIds": [
+              "Succeeded",
+              "Failed"
+            ]
+          },
+          "type": "Compose",
+          "inputs": "@length(body('Get_ObjectIds')?['value'])"
+        }
+      },
+      "runAfter": {
+        "Initialize_DeviceIDs_Array": [
+          "Succeeded"
+        ],
+        "Initialize_GroupID_variable": [
+          "Succeeded"
+        ],
+        "Initialize_allMembers_variable": [
+          "Succeeded"
+        ],
+        "Initialize_LoopDone_variable": [
+          "Succeeded"
+        ],
+        "Initialize_nextLink_Variable": [
+          "Succeeded"
+        ],
+        "Initialize_ObjectIds": [
+          "Succeeded"
+        ]
+      },
+      "type": "Foreach"
+    },
+    "Initialize_ObjectIds": {
+      "runAfter": {
+        "HTTP_Check_Group": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "ObjectIds",
+            "type": "array"
+          }
+        ]
+      }
+    },
+    "If_removals": {
+      "actions": {
+        "For_each_Removal": {
+          "foreach": "@variables('removeIds')",
+          "actions": {
+            "Remove_group_members": {
+              "type": "Http",
+              "inputs": {
+                "uri": "https://graph.microsoft.com/v1.0/groups/@{body('HTTP_Check_Group')?['value'][0]['id']}/members/@{item()?['DeviceId']}/$ref",
+                "method": "DELETE",
+                "headers": {
+                  "Content-type": "application/json"
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://graph.microsoft.com"
+                }
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            }
+          },
+          "type": "Foreach"
+        }
+      },
+      "runAfter": {
+        "View_Removals": [
+          "Succeeded"
+        ]
+      },
+      "else": {
+        "actions": {}
+      },
+      "expression": {
+        "and": [
+          {
+            "greater": [
+              "@length(variables('removeIds'))",
+              0
+            ]
+          }
+        ]
+      },
+      "type": "If"
+    },
+    "If_additions": {
+      "actions": {
+        "Until": {
+          "actions": {
+            "Chunk": {
+              "type": "Compose",
+              "inputs": "@take(skip(variables('addIds'), variables('idx')), variables('chunkSize'))"
+            },
+            "Requests": {
+              "runAfter": {
+                "Chunk": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@outputs('Chunk')",
+                "select": {
+                  "id": "@guid()",
+                  "method": "POST",
+                  "url": "@concat('/groups/', body('HTTP_Check_Group')?['value'][0]['id'], '/members/$ref')",
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": "@json(concat('{\"@odata.id\":\"https://graph.microsoft.com/v1.0/devices/', item()?['DeviceId'], '\"}'))"
+                }
+              }
+            },
+            "BatchBody": {
+              "runAfter": {
+                "Requests": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "requests": "@body('Requests')"
+              }
+            },
+            "POST": {
+              "runAfter": {
+                "BatchBody": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "https://graph.microsoft.com/v1.0/$batch",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": "@outputs('BatchBody')",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://graph.microsoft.com"
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 8,
+                  "interval": "PT5S",
+                  "minimumInterval": "PT5S",
+                  "maximumInterval": "PT2M"
+                }
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            },
+            "Increment_idx_variable": {
+              "runAfter": {
+                "POST": [
+                  "Succeeded"
+                ]
+              },
+              "type": "IncrementVariable",
+              "inputs": {
+                "name": "idx",
+                "value": "@variables('chunkSize')"
+              }
+            }
+          },
+          "expression": "@greaterOrEquals(variables('idx'), length(variables('addIds')))\n",
+          "limit": {
+            "count": 60,
+            "timeout": "PT1H"
+          },
+          "type": "Until"
+        }
+      },
+      "runAfter": {
+        "Initialize_Batching_Variables": [
+          "Succeeded"
+        ]
+      },
+      "else": {
+        "actions": {}
+      },
+      "expression": {
+        "and": [
+          {
+            "greater": [
+              "@length(variables('addIds'))",
+              0
+            ]
+          }
+        ]
+      },
+      "type": "If"
+    },
+    "Initialize_Batching_Variables": {
+      "runAfter": {
+        "View_Additions": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "idx",
+            "type": "integer",
+            "value": 0
+          },
+          {
+            "name": "chunkSize",
+            "type": "integer",
+            "value": 20
+          }
+        ]
+      }
+    },
+    "Send_failure_email": {
+      "runAfter": {
+        "If_additions": [
+          "Failed",
+          "TimedOut",
+          "Skipped"
+        ]
+      },
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['office365-1']['connectionId']"
+          }
+        },
+        "method": "post",
+        "body": {
+          "To": "<sender@your-domain.com>;<recipient@your-domain.com>",
+          "Subject": "The automation intune-collections-sample failed",
+          "Body": "<p class=\"editor-paragraph\">The <a href=\"https://portal.azure.com/#@<your-tenant>.onmicrosoft.com/resource/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/<your-resource-group>/providers/Microsoft.Logic/workflows/intune-collections-sample/logicApp\" class=\"editor-link\">Patch Group Automation</a> failed to update the group @{triggerBody()?['groupName']}.</p>",
+          "Importance": "Normal"
+        },
+        "path": "/v2/Mail"
+      }
+    }
+  },
+  "outputs": {}
+}
